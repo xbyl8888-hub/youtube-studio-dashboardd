@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Studio Dashboard - 自定义收益面板</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <style>
+        /* 全局样式 - 复刻YouTube Studio界面 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Roboto', Arial, sans-serif;
+        }
+        body {
+            background-color: #f9f9f9;
+            color: #202124;
+            font-size: 14px;
+        }
+        /* 顶部导航栏 */
+        .navbar {
+            background-color: white;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .navbar-logo {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 600;
+            font-size: 18px;
+            color: #ff0000;
+        }
+        .navbar-logo svg {
+            width: 24px;
+            height: 24px;
+        }
+        .navbar-search {
+            flex: 1;
+            max-width: 600px;
+            position: relative;
+        }
+        .navbar-search input {
+            width: 100%;
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        .navbar-menu {
+            display: flex;
+            gap: 16px;
+        }
+        .navbar-menu a {
+            text-decoration: none;
+            color: #5f6368;
+            padding: 8px 0;
+            border-bottom: 2px solid transparent;
+        }
+        .navbar-menu a.active {
+            color: #1a73e8;
+            border-bottom: 2px solid #1a73e8;
+            font-weight: 500;
+        }
+        /* 头像样式优化 - 新增 */
+        .navbar-profile-container {
+            position: relative;
+            cursor: pointer;
+        }
+        .navbar-profile {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover; /* 保证图片不拉伸 */
+            border: 1px solid #eee;
+        }
+        /* 头像上传按钮样式 - 新增 */
+        .profile-upload-btn {
+            display: none;
+            position: absolute;
+            top: 40px;
+            right: 0;
+            background-color: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .navbar-profile-container:hover .profile-upload-btn {
+            display: block;
+        }
+        #profile-input {
+            display: none;
+        }
+
+        /* 主容器 */
+        .container {
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+
+        /* 标签页切换（整合两个面板） */
+        .tab-container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .tab-buttons {
+            display: flex;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .tab-btn {
+            padding: 16px 24px;
+            border: none;
+            background: none;
+            font-size: 14px;
+            font-weight: 500;
+            color: #5f6368;
+            cursor: pointer;
+        }
+        .tab-btn.active {
+            color: #1a73e8;
+            border-bottom: 2px solid #1a73e8;
+        }
+        .tab-content {
+            padding: 24px;
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        /* 收益概览卡片 */
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .summary-card {
+            background-color: white;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .summary-card .label {
+            color: #5f6368;
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+        .summary-card .value {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .summary-card .unit {
+            color: #5f6368;
+            font-size: 12px;
+        }
+        .summary-card .edit-btn {
+            margin-top: 8px;
+            padding: 4px 8px;
+            font-size: 12px;
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        /* 时间筛选器 */
+        .time-filter {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .time-filter label {
+            font-weight: 500;
+        }
+        .time-filter input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .time-filter button {
+            padding: 8px 16px;
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        /* 图表容器 */
+        .chart-container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            margin-bottom: 24px;
+            height: 400px;
+        }
+
+        /* 收益来源面板 */
+        .revenue-sources {
+            background-color: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .revenue-sources h3 {
+            margin-bottom: 16px;
+            font-size: 18px;
+        }
+        .revenue-source-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .revenue-source-item .name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .revenue-source-item .icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            background-color: #eee;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .revenue-source-item .value {
+            font-weight: 500;
+        }
+
+        /* 弹窗样式（修改金额用） */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            border-radius: 8px;
+            padding: 24px;
+            width: 400px;
+        }
+        .modal-content h3 {
+            margin-bottom: 16px;
+        }
+        .modal-content input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+        .modal-buttons button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .modal-save {
+            background-color: #1a73e8;
+            color: white;
+        }
+        .modal-cancel {
+            background-color: #eee;
+            color: #5f6368;
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航栏 -->
+    <div class="navbar">
+        <div class="navbar-logo">
+            <svg viewBox="0 0 24 24" fill="#ff0000">
+                <path d="M23.495 6.205a1.507 1.507 0 0 0-1.06-.998c-.01-.001-.021-.002-.031-.002H10.353c-.01 0-.021.001-.031.002a1.507 1.507 0 0 0-1.06.998 15.082 15.082 0 0 0-4.584 8.385c-.002.01-.003.02-.003.03v1.222c0 .01.001.02.003.03 1.454 4.337 5.873 7.57 10.918 7.57 5.045 0 9.464-3.233 10.918-7.57.002-.01.003-.02.003-.03v-1.222c0-.01-.001-.02-.003-.03 1.407-4.124 1.41-8.371-.002-8.385zM9.609 15.601V8.208l6.264 3.696-6.264 3.697z"/>
+            </svg>
+            YouTube Studio
+        </div>
+        <div class="navbar-search">
+            <input type="text" placeholder="Buscar crendes">
+        </div>
+        <div class="navbar-menu">
+            <a href="#">Panel de control</a>
+            <a href="#">Contenído</a>
+            <a href="#">Analíticas</a>
+            <a href="#">Comentarios</a>
+            <a href="#" class="active">Monetización</a>
+        </div>
+        <!-- 头像容器 - 新增/修改 -->
+        <div class="navbar-profile-container">
+            <!-- 默认头像（可替换为你的图片链接） -->
+            <img src="https://via.placeholder.com/32" alt="Perfil" class="navbar-profile" id="profile-img">
+            <!-- 头像上传按钮 -->
+            <div class="profile-upload-btn" id="upload-btn">Cambiar foto de perfil</div>
+            <input type="file" id="profile-input" accept="image/*">
+        </div>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="container">
+        <!-- 标签页切换（整合两个面板） -->
+        <div class="tab-container">
+            <div class="tab-buttons">
+                <button class="tab-btn active" data-tab="tab1">Monetización</button>
+                <button class="tab-btn" data-tab="tab2">Análisis de canal</button>
+            </div>
+
+            <!-- 面板1：Monetización -->
+            <div class="tab-content active" id="tab1">
+                <h2 style="margin-bottom: 20px;">Tus ingresos estimados</h2>
+                
+                <!-- 时间筛选器 -->
+                <div class="time-filter">
+                    <label for="start-date-1">Fecha inicio:</label>
+                    <input type="date" id="start-date-1" value="2024-03-01">
+                    <label for="end-date-1">Fecha fin:</label>
+                    <input type="date" id="end-date-1" value="2024-06-06">
+                    <button id="apply-date-1">Aplicar</button>
+                </div>
+
+                <!-- 核心指标卡片 -->
+                <div class="summary-cards">
+                    <div class="summary-card">
+                        <div class="label">Ingresos estimados</div>
+                        <div class="value" id="revenue-1">US$3,254.89</div>
+                        <div class="unit">Total</div>
+                        <button class="edit-btn" data-target="revenue-1">Editar</button>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Reproducciones con ingresos</div>
+                        <div class="value" id="views-1">678.4K</div>
+                        <div class="unit">Vistas</div>
+                        <button class="edit-btn" data-target="views-1">Editar</button>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">CPM (Costo por mil)</div>
+                        <div class="value" id="cpm-1">US$8.76</div>
+                        <div class="unit">USD/mil vistas</div>
+                        <button class="edit-btn" data-target="cpm-1">Editar</button>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">RPM (Ingresos por mil)</div>
+                        <div class="value" id="rpm-1">US$4.32</div>
+                        <div class="unit">USD/mil vistas</div>
+                        <button class="edit-btn" data-target="rpm-1">Editar</button>
+                    </div>
+                </div>
+
+                <!-- 图表容器 -->
+                <div class="chart-container">
+                    <canvas id="chart-1"></canvas>
+                </div>
+
+                <!-- 收益来源 -->
+                <div class="revenue-sources">
+                    <h3>Principales fuentes de ingreso</h3>
+                    <div class="revenue-source-item">
+                        <div class="name">
+                            <div class="icon">🎬</div>
+                            <span>Fondo de YouTube Shorts</span>
+                        </div>
+                        <div class="value" id="shorts-revenue-1">US$1,290.45</div>
+                    </div>
+                    <div class="revenue-source-item">
+                        <div class="name">
+                            <div class="icon">📢</div>
+                            <span>Ingresos por anuncios</span>
+                        </div>
+                        <div class="value" id="ads-revenue-1">US$1,540.32</div>
+                    </div>
+                    <div class="revenue-source-item">
+                        <div class="name">
+                            <div class="icon">👥</div>
+                            <span>Miembros del canal</span>
+                        </div>
+                        <div class="value" id="members-revenue-1">US$315.22</div>
+                    </div>
+                    <div class="revenue-source-item">
+                        <div class="name">
+                            <div class="icon">💬</div>
+                            <span>Super Chat y Super Stickers</span>
+                        </div>
+                        <div class="value" id="superchat-revenue-1">US$108.90</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 面板2：Análisis de canal -->
+            <div class="tab-content" id="tab2">
+                <h2 style="margin-bottom: 20px;">Análisis de los canal - Ingresos</h2>
+                
+                <!-- 时间筛选器 -->
+                <div class="time-filter">
+                    <label for="start-date-2">Fecha inicio:</label>
+                    <input type="date" id="start-date-2" value="2024-03-22">
+                    <label for="end-date-2">Fecha fin:</label>
+                    <input type="date" id="end-date-2" value="2024-04-18">
+                    <button id="apply-date-2">Aplicar</button>
+                </div>
+
+                <!-- 核心指标卡片 -->
+                <div class="summary-cards">
+                    <div class="summary-card">
+                        <div class="label">Ingresos estimados</div>
+                        <div class="value" id="revenue-2">$3,482.56</div>
+                        <div class="unit">Últimos 28 días</div>
+                        <button class="edit-btn" data-target="revenue-2">Editar</button>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">RPM (Ingresos por mil)</div>
+                        <div class="value" id="rpm-2">$7.89</div>
+                        <div class="unit">USD/mil vistas</div>
+                        <button class="edit-btn" data-target="rpm-2">Editar</button>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">CPM (Costo por mil)</div>
+                        <div class="value" id="cpm-2">$15.32</div>
+                        <div class="unit">USD/mil vistas</div>
+                        <button class="edit-btn" data-target="cpm-2">Editar</button>
+                    </div>
+                </div>
+
+                <!-- 图表容器 -->
+                <div class="chart-container">
+                    <canvas id="chart-2"></canvas>
+                </div>
+
+                <!-- 收益来源 -->
+                <div class="revenue-sources">
+                    <h3>Detalles de ingresos</h3>
+                    <div class="revenue-source-item">
+                        <div class="name">
+                            <div class="icon">💳</div>
+                            <span>Ingresos por transacciones (Super Chats y membresías)</span>
+                        </div>
+                        <div class="value" id="transactions-revenue-2">$125.40</div>
+                    </div>
+                    <div class="revenue-source-item">
+                        <div class="name">
+                            <div class="icon">🎬</div>
+                            <span>Ingresos de Shorts</span>
+                        </div>
+                        <div class="value" id="shorts-revenue-2">$982.34</div>
+                    </div>
+                    <div class="revenue-source-item">
+                        <div class="name">
+                            <div class="icon">📢</div>
+                            <span>Ingresos de anuncios</span>
+                        </div>
+                        <div class="value" id="ads-revenue-2">$2,142.13</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 修改金额的弹窗 -->
+    <div class="modal" id="edit-modal">
+        <div class="modal-content">
+            <h3>Editar valor</h3>
+            <input type="text" id="edit-input" placeholder="Ingresa el nuevo valor (ej: 3254.89)">
+            <div class="modal-buttons">
+                <button class="modal-cancel" id="modal-cancel">Cancelar</button>
+                <button class="modal-save" id="modal-save">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量：存储当前编辑的元素ID
+        let currentEditTarget = '';
+        
+        // ========== 新增：头像上传功能 ==========
+        const profileImg = document.getElementById('profile-img');
+        const profileInput = document.getElementById('profile-input');
+        const uploadBtn = document.getElementById('upload-btn');
+
+        // 点击"更换头像"按钮触发文件选择
+        uploadBtn.addEventListener('click', () => {
+            profileInput.click();
+        });
+
+        // 选择图片后更新头像
+        profileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                // 验证文件类型为图片
+                if (!file.type.startsWith('image/')) {
+                    alert('Por favor selecciona un archivo de imagen válido (JPG, PNG, etc.)');
+                    return;
+                }
+                // 将本地图片转为URL显示
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    profileImg.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // ========== 原有功能逻辑 ==========
+        // 1. 标签页切换功能
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // 移除所有active状态
+                tabBtns.forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                // 添加当前active状态
+                btn.classList.add('active');
+                const tabId = btn.getAttribute('data-tab');
+                document.getElementById(tabId).classList.add('active');
+                // 切换后重新渲染对应图表
+                if (tabId === 'tab1') renderChart1();
+                if (tabId === 'tab2') renderChart2();
+            });
+        });
+
+        // 2. 弹窗功能（编辑金额）
+        const modal = document.getElementById('edit-modal');
+        const editBtns = document.querySelectorAll('.edit-btn');
+        const modalCancel = document.getElementById('modal-cancel');
+        const modalSave = document.getElementById('modal-save');
+        const editInput = document.getElementById('edit-input');
+
+        // 打开弹窗
+        editBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentEditTarget = btn.getAttribute('data-target');
+                // 获取当前值（去除货币符号和千分位）
+                const currentValue = document.getElementById(currentEditTarget).textContent
+                    .replace(/[^\d.]/g, '');
+                editInput.value = currentValue;
+                modal.style.display = 'flex';
+            });
+        });
+
+        // 关闭弹窗（取消）
+        modalCancel.addEventListener('click', () => {
+            modal.style.display = 'none';
+            editInput.value = '';
+            currentEditTarget = '';
+        });
+
+        // 保存修改
+        modalSave.addEventListener('click', () => {
+            if (!currentEditTarget || !editInput.value) return;
+            
+            // 格式化数值（添加货币符号和千分位）
+            const rawValue = parseFloat(editInput.value);
+            if (isNaN(rawValue)) {
+                alert('Por favor ingresa un número válido');
+                return;
+            }
+
+            // 根据不同面板格式化货币符号（US$ 或 $）
+            let formattedValue;
+            if (currentEditTarget.includes('1')) {
+                formattedValue = `US$${rawValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            } else {
+                formattedValue = `$${rawValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            }
+
+            // 更新显示值
+            document.getElementById(currentEditTarget).textContent = formattedValue;
+            
+            // 重新渲染对应图表
+            if (currentEditTarget.includes('1')) renderChart1();
+            if (currentEditTarget.includes('2')) renderChart2();
+
+            // 关闭弹窗
+            modal.style.display = 'none';
+            editInput.value = '';
+            currentEditTarget = '';
+        });
+
+        // 3. 时间筛选功能
+        document.getElementById('apply-date-1').addEventListener('click', () => {
+            const start = document.getElementById('start-date-1').value;
+            const end = document.getElementById('end-date-1').value;
+            if (start && end && new Date(start) > new Date(end)) {
+                alert('La fecha de inicio no puede ser posterior a la fecha fin');
+                return;
+            }
+            renderChart1(); // 重新渲染图表
+        });
+
+        document.getElementById('apply-date-2').addEventListener('click', () => {
+            const start = document.getElementById('start-date-2').value;
+            const end = document.getElementById('end-date-2').value;
+            if (start && end && new Date(start) > new Date(end)) {
+                alert('La fecha de inicio no puede ser posterior a la fecha fin');
+                return;
+            }
+            renderChart2(); // 重新渲染图表
+        });
+
+        // 4. 图表渲染函数（面板1）
+        let chart1 = null;
+        function renderChart1() {
+            const ctx = document.getElementById('chart-1').getContext('2d');
+            
+            // 获取当前筛选的时间范围
+            const startDate = document.getElementById('start-date-1').value;
+            const endDate = document.getElementById('end-date-1').value;
+            
+            // 生成时间轴数据（简化版，实际可根据时间范围动态生成）
+            const labels = ['mar. 2024', 'abr. 2024', 'may. 2024', 'jun. 2024'];
+            // 模拟根据总收益动态生成的图表数据（比例保持一致）
+            const totalRevenue = parseFloat(document.getElementById('revenue-1').textContent.replace(/[^\d.]/g, ''));
+            const ingresosData = [
+                totalRevenue * 0.1, 
+                totalRevenue * 0.2, 
+                totalRevenue * 0.8, 
+                totalRevenue * 0.7
+            ];
+            const shortsData = [
+                totalRevenue * 0.05, 
+                totalRevenue * 0.1, 
+                totalRevenue * 0.3, 
+                totalRevenue * 0.25
+            ];
+
+            // 销毁旧图表（避免重复渲染）
+            if (chart1) chart1.destroy();
+            
+            // 创建新图表
+            chart1 = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Ingresos estimades',
+                            data: ingresosData,
+                            borderColor: '#1a73e8',
+                            backgroundColor: 'rgba(26, 115, 232, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Fondo Shorts',
+                            data: shortsData,
+                            borderColor: '#34a853',
+                            backgroundColor: 'rgba(52, 168, 83, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Ingresos mensuales estimados (${startDate} - ${endDate})`
+                        }
+                    }
+                }
+            });
+        }
+
+        // 5. 图表渲染函数（面板2）
+        let chart2 = null;
+        function renderChart2() {
+            const ctx = document.getElementById('chart-2').getContext('2d');
+            
+            // 获取当前筛选的时间范围
+            const startDate = document.getElementById('start-date-2').value;
+            const endDate = document.getElementById('end-date-2').value;
+            
+            // 生成时间轴数据（简化版）
+            const labels = ['23 mar', '30 mar', '6 abr', '12 abr', '18 abr'];
+            // 模拟根据总收益动态生成的图表数据
+            const totalRevenue = parseFloat(document.getElementById('revenue-2').textContent.replace(/[^\d.]/g, ''));
+            const dailyRevenue = [
+                totalRevenue * 0.05, 
+                totalRevenue * 0.08, 
+                totalRevenue * 0.04, 
+                totalRevenue * 0.06, 
+                totalRevenue * 0.12
+            ];
+
+            // 销毁旧图表
+            if (chart2) chart2.destroy();
+            
+            // 创建新图表
+            chart2 = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Ingresos diarios',
+                            data: dailyRevenue,
+                            backgroundColor: 'rgba(52, 168, 83, 0.7)',
+                            borderColor: '#34a853',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Ingresos estimados diarios (${startDate} - ${endDate})`
+                        }
+                    }
+                }
+            });
+        }
+
+        // 初始化：加载默认图表
+        window.onload = function() {
+            renderChart1();
+            renderChart2();
+        };
+    </script>
+</body>
+</html>
